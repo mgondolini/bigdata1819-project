@@ -1,0 +1,5 @@
+rootProject.name = 'bigdata1819-project'
+include 'MapReduce'
+include 'Spark'
+include 'SparkSQL'
+
