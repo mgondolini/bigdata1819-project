@@ -42,6 +42,8 @@ public class TrendingVideosUnion {
         job.setJarByClass(TrendingVideosUnion.class);
         job.setMapperClass(UnionMapper.class);
         job.setReducerClass(UnionReducer.class);
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(Text.class);
 
         FileSystem fs = FileSystem.get(new Configuration());
         Path outputPath = new Path(args[0]);
