@@ -12,6 +12,7 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.IOException;
+import java.util.StringTokenizer;
 
 public class TrendingVideosUnion {
 
@@ -21,8 +22,12 @@ public class TrendingVideosUnion {
 
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             String line = value.toString();
-            String[] token = line.split(",");
-            newKey.set(token[0]);
+            StringTokenizer tokenizer = new StringTokenizer(line, ",");
+            int i = 0;
+            while(tokenizer.hasMoreTokens() && i == 0){
+                newKey.set(tokenizer.nextToken());
+                i++;
+            }
             newLine.set(line);
             context.write(newKey, newLine);
         }
@@ -41,9 +46,9 @@ public class TrendingVideosUnion {
 
         job.setJarByClass(TrendingVideosUnion.class);
         job.setMapperClass(UnionMapper.class);
-        job.setReducerClass(UnionReducer.class);
         job.setMapOutputKeyClass(Text.class);
         job.setMapOutputValueClass(Text.class);
+        job.setReducerClass(UnionReducer.class);
 
         FileSystem fs = FileSystem.get(new Configuration());
         Path outputPath = new Path(args[0]);
