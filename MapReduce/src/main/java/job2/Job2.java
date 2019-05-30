@@ -3,6 +3,7 @@ package job2;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
@@ -17,70 +18,52 @@ import java.util.*;
 
 public class Job2 {
 
-	public static class CategoryMapper extends Mapper<Object, Text, Text, Text> {
+	public static class CategoryMapper extends Mapper<Object, Text, Text, IntWritable> {
 		private Text category = new Text();
-		private Text tagList = new Text();
+		private final static IntWritable one = new IntWritable(1);
 
-		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+		public void map(Object key, IntWritable value, Context context) throws IOException, InterruptedException {
+			/**
+			 * MAP-1
+			 * category:tag | 1
+			 *
+			 * REDUCE-1
+			 * category:tag | total
+			 *
+			 * MAP-2
+			 * category | tag:total
+			 *
+			 * REDUCE-2
+			 * category | 10 tag più presenti
+			 */
+
 			String line = value.toString();
 			String[] tokens = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", 11);
 			if(tokens.length > 7){
 				if(tokens[4].equals("category_id") || tokens[6].equals("tags")) {
 					return;
 				}else {
-					category.set(tokens[4]);
 					String[] tags = tokens[6].split("(\\|)");
 					for (String tag : tags) {
-						tagList.set(tag);
-						context.write(category, tagList);
+						category.set(tokens[4].concat(":"+tag));
+						context.write(category, one);
 					}
 				}
 			}else return;
+		}
+	}
+
+	public static class TagReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+		private IntWritable result = new IntWritable();
+		public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+			int sum = 0;
+			for (IntWritable val : values) {
+				sum += val.get();
 			}
-	}
-
-	public static class TagReducer extends Reducer<Text, Text, Text, Text> {
-
-		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-
-			HashMap<String, Integer> tagMap = new HashMap<>();
-
-			for(Text tag: values) incrementTagOccurrence(tagMap, tag.toString());
-
-			Map<String, Integer> orderedTags = sortByValue(tagMap);
-
-			List<Map.Entry<String,Integer>> results = new ArrayList<>(orderedTags.entrySet());
-
-			context.write(new Text("\ncategory: "+key), new Text("tags: "+ results.subList(0, 10)));
+			result.set(sum);
+			context.write(key, result);
 		}
 	}
-
-	private static <K, V> Map<K, V> sortByValue(Map<K, V> map) {
-		List<Map.Entry<K, V>> list = new LinkedList<>(map.entrySet());
-		Collections.sort(list, new Comparator<Object>() {
-			@SuppressWarnings("unchecked")
-			public int compare(Object o1, Object o2) {
-				return ((Comparable<V>) ((Map.Entry<K, V>) (o2)).getValue()).compareTo(((Map.Entry<K, V>) (o1)).getValue());
-			}
-		});
-		Map<K, V> result = new LinkedHashMap<>();
-		for (Map.Entry<K, V> entry : list) {
-			result.put(entry.getKey(), entry.getValue());
-		}
-		return result;
-	}
-
-	private static <K> void incrementTagOccurrence(Map<K,Integer> map, K key){
-//		map.merge(key, 1, (a, b) -> a + b);
-
-		Integer count = map.get(key);
-		if(count == null){
-			map.put(key, 1);
-		}else{
-			map.put(key, count+1);
-		}
-	}
-
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 		Configuration conf = new Configuration();
