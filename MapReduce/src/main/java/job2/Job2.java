@@ -35,6 +35,7 @@ public class Job2 {
 			}else {
 				String[] tags = tokens[6].split("(\\|)");
 				for (String tag : tags) {
+					tag.replace("\"", "");
 					categoryTagKey.set(tokens[4].concat(":"+tag));
 					context.write(categoryTagKey, one);
 				}
@@ -57,27 +58,38 @@ public class Job2 {
 	public static class TagMapper extends Mapper<Text, Text, Text, Text> {
 		private Text category = new Text();
 		private Text tagCount = new Text();
+
 		public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
+
 			String[] tokens = key.toString().split(":");
+
 			category.set(tokens[0]);
-			tagCount.set(tokens[1] + " "+ value.toString());
+
+			tagCount.set(tokens[1] + " " + value.toString());
+
+			// QUI BISOGNA USARE UN COMPARATOR PER FARE UN ORDINAMENTO CUSTOM
+			// https://stackoverflow.com/questions/18154686/how-to-implement-sort-in-hadoop
+			// https://stackoverflow.com/questions/8289508/sorting-by-value-in-hadoop-from-a-file
 			context.write(category, tagCount);
 		}
 	}
 
-	public static class TagReducer extends Reducer<Text, Text, Text, ArrayList<Text>> {
+	public static class TagReducer extends Reducer<Text, Text, Text, Text>{
+
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+
 			ArrayList<Text> categoryTags = new ArrayList<>();
+
 			for(Text t: values){
 				categoryTags.add(t);
 			}
-			context.write(key, categoryTags);
+
+			context.write(key, new Text(String.valueOf(categoryTags.size())));
 		}
 	}
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 		Configuration conf = new Configuration();
-		conf.set("key.value.separator.in.input.line", "\t");
 		ArrayList<Job> jobs = new ArrayList<>();
 		jobs.add(Job.getInstance(conf, "First job"));
 		jobs.add(Job.getInstance(conf, "Second job"));
