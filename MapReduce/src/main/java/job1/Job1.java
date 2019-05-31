@@ -26,30 +26,36 @@ public class Job1 {
 
 	public static class CommentsMapper extends Mapper<Object, Text, Text, IntWritable> {
 		private Text classification = new Text();
-		private IntWritable numComments = new IntWritable();
+		private IntWritable commentsIndex = new IntWritable();
 
 		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
 
 			String line = value.toString();
 			String[] tokens = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", 14);
 
-			if(tokens[0].equals("video_id") || tokens[13].equals("True")) {
+			if(tokens[0].equals("video_id") || tokens[12].equals("True") || tokens[13].equals("True")) {
 				return;
-			}else {
+			} else {
 				int likes = Integer.valueOf(tokens[8]);
 				int dislikes = Integer.valueOf(tokens[9]);
+				int comments = Integer.valueOf(tokens[10]);
+				int views = Integer.valueOf(tokens[7]);
 
-				numComments.set(Integer.valueOf(tokens[10]));
+				if(comments == 0) comments = 1;
 
-				if((likes/(dislikes+1)) > THRESHOLD_MAX){
+				commentsIndex.set(comments);
+
+				if(dislikes == 0) dislikes = 1;
+
+				if((likes/(dislikes)) > THRESHOLD_MAX){
 					classification.set(GOOD);
-				}else if((likes/(dislikes+1)) < THRESHOLD_MIN){
+				}else if((likes/(dislikes)) < THRESHOLD_MIN){
 					classification.set(BAD);
 				}else{
 					classification.set(NEUTRAL);
 				}
 			}
-			context.write(classification, numComments);
+			context.write(classification, commentsIndex);
 		}
 	}
 
