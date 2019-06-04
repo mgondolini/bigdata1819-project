@@ -14,7 +14,6 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.IOException;
-import java.util.Iterator;
 
 public class Job1 {
 
@@ -41,7 +40,7 @@ public class Job1 {
 				int comments = Integer.valueOf(tokens[10]);
 				int views = Integer.valueOf(tokens[7]);
 
-				if(comments == 0) comments = 1;
+				if(comments==0) comments = 1;
 
 				commentsIndex.set(comments);
 

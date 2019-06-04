@@ -4,7 +4,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
@@ -29,16 +28,17 @@ public class Job2 {
 
 		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
 			String line = value.toString();
+
 			String[] tokens = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", 11);
-			if(tokens[4].equals("category_id") || tokens[6].equals("tags")) {
+
+			if (tokens[4].equals("category_id") || tokens[6].equals("tags")) {
 				return;
-			}else {
-				String[] tags = tokens[6].split("(\\|)");
-				for (String tag : tags) {
-					tag.replace("\"", "");
-					categoryTagKey.set(tokens[4].concat(":"+tag));
-					context.write(categoryTagKey, one);
-				}
+			}
+
+			String[] tags = tokens[6].split("(\\|)");
+			for (String tag : tags) {
+				categoryTagKey.set(tokens[4].concat(":" + tag));
+				context.write(categoryTagKey, one);
 			}
 		}
 	}
@@ -61,15 +61,12 @@ public class Job2 {
 
 		public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
 
-			String[] tokens = key.toString().split(":");
+			String[] tokens = key.toString().split(":", 2);
 
 			category.set(tokens[0]);
 
-			tagCount.set(tokens[1] + " " + value.toString());
+			tagCount.set(tokens[1] + ":" + value.toString());
 
-			// QUI BISOGNA USARE UN COMPARATOR PER FARE UN ORDINAMENTO CUSTOM
-			// https://stackoverflow.com/questions/18154686/how-to-implement-sort-in-hadoop
-			// https://stackoverflow.com/questions/8289508/sorting-by-value-in-hadoop-from-a-file
 			context.write(category, tagCount);
 		}
 	}
@@ -78,35 +75,46 @@ public class Job2 {
 
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 
-			ArrayList<Text> categoryTags = new ArrayList<>();
+			TreeMap<Double, String> tagWithOccurences = new TreeMap<>();
 
 			for(Text t: values){
-				categoryTags.add(t);
+				String[] valueTokens = t.toString().split(":", 3);
+				try {
+					double occurences = Double.parseDouble(valueTokens[1]);
+					tagWithOccurences.put(occurences, valueTokens[0]);
+				} catch (Exception e) { }
 			}
 
-			context.write(key, new Text(String.valueOf(categoryTags.size())));
+			if (tagWithOccurences.size() > 10) {
+				Double lastKeyToKeep = (Double) tagWithOccurences.descendingMap().keySet().toArray()[10];
+				Map<Double, String> mostUsedTags = tagWithOccurences.descendingMap().headMap(lastKeyToKeep);
+				context.write(key, new Text(mostUsedTags.toString()));
+			} else {
+				context.write(key, new Text(tagWithOccurences.toString()));
+			}
+
 		}
 	}
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 		Configuration conf = new Configuration();
 		ArrayList<Job> jobs = new ArrayList<>();
-		jobs.add(Job.getInstance(conf, "First job"));
-		jobs.add(Job.getInstance(conf, "Second job"));
+		jobs.add(Job.getInstance(conf, "First Job"));
+		jobs.add(Job.getInstance(conf, "Second Job"));
 
-		// Output path and data type of first job
-		// should be the same as the input ones of the second job
-		for (Job job: jobs) job.setJarByClass(Job2.class);
+		for (Job job: jobs) job.setJarByClass(Job2Alternative.class);
 
-		jobs.get(0).setMapperClass(CategoryMapper.class);
+		// JOB 1
+
+		jobs.get(0).setMapperClass(Job2Alternative.CategoryMapper.class);
 		jobs.get(0).setMapOutputKeyClass(Text.class);
 		jobs.get(0).setMapOutputValueClass(IntWritable.class);
-		jobs.get(0).setReducerClass(CategoryReducer.class);
+		jobs.get(0).setReducerClass(Job2Alternative.CategoryReducer.class);
 		jobs.get(0).setOutputFormatClass(TextOutputFormat.class);
 
-		MultipleInputs.addInputPath(jobs.get(0), new Path(args[1]), TextInputFormat.class, CategoryMapper.class);
-		MultipleInputs.addInputPath(jobs.get(0), new Path(args[2]), TextInputFormat.class, CategoryMapper.class);
-		MultipleInputs.addInputPath(jobs.get(0), new Path(args[3]), TextInputFormat.class, CategoryMapper.class);
+		MultipleInputs.addInputPath(jobs.get(0), new Path(args[1]), TextInputFormat.class, Job2Alternative.CategoryMapper.class);
+		MultipleInputs.addInputPath(jobs.get(0), new Path(args[2]), TextInputFormat.class, Job2Alternative.CategoryMapper.class);
+		MultipleInputs.addInputPath(jobs.get(0), new Path(args[3]), TextInputFormat.class, Job2Alternative.CategoryMapper.class);
 
 		FileSystem fs = FileSystem.get(new Configuration());
 		Path firstJobOutputPath = new Path(args[0]);
