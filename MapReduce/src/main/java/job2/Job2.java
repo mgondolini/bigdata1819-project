@@ -75,22 +75,22 @@ public class Job2 {
 
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 
-			TreeMap<Double, String> tagWithOccurences = new TreeMap<>();
+			TreeMap<Integer, String> tagWithOccurrences = new TreeMap<>();
 
 			for(Text t: values){
 				String[] valueTokens = t.toString().split(":", 3);
 				try {
-					double occurences = Double.parseDouble(valueTokens[1]);
-					tagWithOccurences.put(occurences, valueTokens[0]);
+					int occurrences = Integer.parseInt(valueTokens[1]);
+					tagWithOccurrences.put(occurrences, valueTokens[0]);
 				} catch (Exception e) { }
 			}
 
-			if (tagWithOccurences.size() > 10) {
-				Double lastKeyToKeep = (Double) tagWithOccurences.descendingMap().keySet().toArray()[10];
-				Map<Double, String> mostUsedTags = tagWithOccurences.descendingMap().headMap(lastKeyToKeep);
+			if (tagWithOccurrences.size() > 10) {
+				Integer lastKeyToKeep = (Integer) tagWithOccurrences.descendingMap().keySet().toArray()[10];
+				Map<Integer, String> mostUsedTags = tagWithOccurrences.descendingMap().headMap(lastKeyToKeep);
 				context.write(key, new Text(mostUsedTags.toString()));
 			} else {
-				context.write(key, new Text(tagWithOccurences.toString()));
+				context.write(key, new Text(tagWithOccurrences.toString()));
 			}
 
 		}
@@ -102,14 +102,15 @@ public class Job2 {
 		jobs.add(Job.getInstance(conf, "First Job"));
 		jobs.add(Job.getInstance(conf, "Second Job"));
 
-		for (Job job: jobs) job.setJarByClass(Job2Alternative.class);
+		for (Job job: jobs){
+			job.setJarByClass(Job2Alternative.class);
+		}
 
 		// JOB 1
-
-		jobs.get(0).setMapperClass(Job2Alternative.CategoryMapper.class);
+		jobs.get(0).setMapperClass(CategoryMapper.class);
 		jobs.get(0).setMapOutputKeyClass(Text.class);
 		jobs.get(0).setMapOutputValueClass(IntWritable.class);
-		jobs.get(0).setReducerClass(Job2Alternative.CategoryReducer.class);
+		jobs.get(0).setReducerClass(CategoryReducer.class);
 		jobs.get(0).setOutputFormatClass(TextOutputFormat.class);
 
 		MultipleInputs.addInputPath(jobs.get(0), new Path(args[1]), TextInputFormat.class, Job2Alternative.CategoryMapper.class);
@@ -123,12 +124,14 @@ public class Job2 {
 		}
 		FileOutputFormat.setOutputPath(jobs.get(0), firstJobOutputPath);
 
+		// JOB 2
 		FileInputFormat.addInputPath(jobs.get(1), firstJobOutputPath);
 		Path finalJobOutputPath = new Path(args[4]);
 		if (fs.exists(finalJobOutputPath)) {
 			fs.delete(finalJobOutputPath, true);
 		}
 		FileOutputFormat.setOutputPath(jobs.get(1), finalJobOutputPath);
+
 		jobs.get(1).setInputFormatClass(KeyValueTextInputFormat.class);
 		jobs.get(1).setMapperClass(TagMapper.class);
 		jobs.get(1).setMapOutputKeyClass(Text.class);
