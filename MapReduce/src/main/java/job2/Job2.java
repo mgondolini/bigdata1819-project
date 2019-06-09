@@ -41,8 +41,10 @@ public class Job2 {
 
 			String[] tags = tokens[6].split("(\\|)");
 			for (String tag : tags) {
-				categoryTagKey.set(tokens[4].concat(":" + tag));
-				context.write(categoryTagKey, one);
+				if(!tag.equals("[none]")) {
+					categoryTagKey.set(tokens[4].concat(":" + tag));
+					context.write(categoryTagKey, one);
+				}
 			}
 		}
 	}
