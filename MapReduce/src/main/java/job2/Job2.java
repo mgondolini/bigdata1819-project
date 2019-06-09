@@ -1,9 +1,13 @@
 package job2;
 
+import com.cloudera.org.codehaus.jackson.JsonFactory;
+import com.cloudera.org.codehaus.jackson.JsonParser;
+import com.cloudera.org.codehaus.jackson.JsonToken;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
@@ -96,11 +100,66 @@ public class Job2 {
 		}
 	}
 
+
+	public static class CategoryNameMapper extends Mapper<Object, Text, Text, Text> {
+
+		static JsonFactory factory = new JsonFactory();
+
+		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+			JsonParser parser = factory.createJsonParser(value.toString());
+			Text idCategoryString = new Text();
+			Text nameCategoryString = new Text();
+			while(!parser.isClosed()){
+				JsonToken jsonToken = parser.nextToken();
+
+				if(JsonToken.FIELD_NAME.equals(jsonToken)){
+					String fieldName = parser.getCurrentName();
+
+					jsonToken = parser.nextToken();
+
+					if("id".equals(fieldName)){
+						idCategoryString.set(parser.getText());
+					} else if ("category".equals(fieldName)){
+						nameCategoryString.set("join-category:" + parser.getText());
+					}
+				}
+			}
+			context.write(idCategoryString, nameCategoryString);
+		}
+	}
+
+	public static class DummyCategoryMapper extends Mapper<Text, Text, Text, Text> {
+
+		public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
+			context.write(key, value);
+		}
+	}
+
+	public static class CategoryNameReducer extends Reducer<Text, Text, Text, Text> {
+
+		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+
+			String categoryName = "";
+			String categoryTags = "";
+
+			for(Text val : values) {
+				if (val.toString().contains("join-category")) {
+					categoryName = val.toString().split(":", 2)[1];
+				} else {
+					categoryTags = val.toString();
+				}
+			}
+
+			context.write(new Text(categoryName), new Text(categoryTags));
+		}
+	}
+
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 		Configuration conf = new Configuration();
 		ArrayList<Job> jobs = new ArrayList<>();
 		jobs.add(Job.getInstance(conf, "First Job"));
 		jobs.add(Job.getInstance(conf, "Second Job"));
+		jobs.add(Job.getInstance(conf, "Third Job (JOIN)"));
 
 		for (Job job: jobs){
 			job.setJarByClass(Job2Alternative.class);
@@ -113,9 +172,9 @@ public class Job2 {
 		jobs.get(0).setReducerClass(CategoryReducer.class);
 		jobs.get(0).setOutputFormatClass(TextOutputFormat.class);
 
-		MultipleInputs.addInputPath(jobs.get(0), new Path(args[1]), TextInputFormat.class, Job2Alternative.CategoryMapper.class);
-		MultipleInputs.addInputPath(jobs.get(0), new Path(args[2]), TextInputFormat.class, Job2Alternative.CategoryMapper.class);
-		MultipleInputs.addInputPath(jobs.get(0), new Path(args[3]), TextInputFormat.class, Job2Alternative.CategoryMapper.class);
+		MultipleInputs.addInputPath(jobs.get(0), new Path(args[1]), TextInputFormat.class, Job2.CategoryMapper.class);
+		MultipleInputs.addInputPath(jobs.get(0), new Path(args[2]), TextInputFormat.class, Job2.CategoryMapper.class);
+		MultipleInputs.addInputPath(jobs.get(0), new Path(args[3]), TextInputFormat.class, Job2.CategoryMapper.class);
 
 		FileSystem fs = FileSystem.get(new Configuration());
 		Path firstJobOutputPath = new Path(args[0]);
@@ -125,18 +184,30 @@ public class Job2 {
 		FileOutputFormat.setOutputPath(jobs.get(0), firstJobOutputPath);
 
 		// JOB 2
-		FileInputFormat.addInputPath(jobs.get(1), firstJobOutputPath);
-		Path finalJobOutputPath = new Path(args[4]);
-		if (fs.exists(finalJobOutputPath)) {
-			fs.delete(finalJobOutputPath, true);
-		}
-		FileOutputFormat.setOutputPath(jobs.get(1), finalJobOutputPath);
-
 		jobs.get(1).setInputFormatClass(KeyValueTextInputFormat.class);
 		jobs.get(1).setMapperClass(TagMapper.class);
 		jobs.get(1).setMapOutputKeyClass(Text.class);
 		jobs.get(1).setMapOutputValueClass(Text.class);
 		jobs.get(1).setReducerClass(TagReducer.class);
+		FileInputFormat.addInputPath(jobs.get(1), firstJobOutputPath);
+		Path secondOutputPath = new Path(args[4]);
+		if (fs.exists(secondOutputPath)) {
+			fs.delete(secondOutputPath, true);
+		}
+		FileOutputFormat.setOutputPath(jobs.get(1), secondOutputPath);
+
+		//JOB 3 (JOIN)
+		jobs.get(2).setMapperClass(CategoryNameMapper.class);
+		jobs.get(2).setReducerClass(CategoryNameReducer.class);
+		jobs.get(2).setOutputKeyClass(Text.class);
+		jobs.get(2).setOutputValueClass(Text.class);
+		MultipleInputs.addInputPath(jobs.get(2), secondOutputPath, KeyValueTextInputFormat.class, Job2.DummyCategoryMapper.class);
+		MultipleInputs.addInputPath(jobs.get(2), new Path(args[6]), TextInputFormat.class, Job2.CategoryNameMapper.class);
+		Path finalOutputPath = new Path(args[5]);
+		if (fs.exists(finalOutputPath)) {
+			fs.delete(finalOutputPath, true);
+		}
+		FileOutputFormat.setOutputPath(jobs.get(2), finalOutputPath);
 
 		for (Job job: jobs) {
 			if (!job.waitForCompletion(true)) {
