@@ -35,9 +35,14 @@ val GbDF = sqlContext.read.format("csv").option("delimiter", ",").option("header
 
 val UsDF = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(usVideosCsvFilePath)
 
-val CaDfCategory = CaDF.join(categoryNames, CaDF("category_id")===categoryNames("id"), "left").drop("category_id").drop("id")
+
+//da controllare HEADER
+val unionDF = CaDF.unionAll(GbDF).unionAll(UsDF)
+
+val unionDFCategory = unionDF.join(categoryNames, unionDF("category_id")===categoryNames("id"), "left").drop("category_id").drop("id")
 
 //Nel caso volessimo la colonna Category nella vecchia posisizione di category_id
 val reorderedColumnNames: Array[String] = Array("video_id", "trending_date", "title", "channel_title", "category", "publish_time", "tags", "views", "likes", "dislikes", "comment_count", "thumbnail_link", "comments_disabled", "ratings_disabled", "video_error_or_removed", "description")
 
-val CaDfCategoryOrdered = CaDfCategory.select(reorderedColumnNames.head, reorderedColumnNames.tail: _*)
+val unionDFCategoryOrdered = unionDFCategory.select(reorderedColumnNames.head, reorderedColumnNames.tail: _*)
+
