@@ -15,7 +15,7 @@ val gbVideosCsvFilePath: String = "dataset/GBvideos.csv"
 val usVideosCsvFilePath: String = "dataset/USvideos.csv"
 
 
-//Import data from JSON file to DataFrame
+// Import data from JSON file to DataFrame
 val categoryNames = sqlContext.read.json(categoryJsonFilePath)
 
 // SPARK SHELL 1
@@ -35,11 +35,39 @@ val GbDF = sqlContext.read.format("csv").option("delimiter", ",").option("header
 
 val UsDF = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(usVideosCsvFilePath)
 
-//UNION
+// UNION
 
-//da controllare HEADER
-val unionDF = CaDF.unionAll(GbDF).unionAll(UsDF)
+// Da controllare HEADER
+val trendingVideosUnionDF = CaDF.unionAll(GbDF).unionAll(UsDF)
 
-//alternativa
+// Alternativa
 val unionWhileLoading = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(gbVideosCsvFilePath,usVideosCsvFilePath,caVideosCsvFilePath)
 
+// Classification
+val neutral = trendingVideosUnionDF.where("likes/(dislikes) > 4 AND likes/(dislikes) < 6 ") // 4988, MR=7224.0
+val neutralNumber = neutral.count()
+
+val good = trendingVideosUnionDF.where("likes/(dislikes) > 6") // 106727, MR=:03881.0
+val goodNumber = good.count()
+
+val bad = trendingVideosUnionDF.where("likes/(dislikes) < 4") // 7804, MR=7742.0
+val badNumber = bad.count()
+
+// Average number of comments for classification
+val neutralComments = neutral.agg(sum("comment_count")/neutralNumber).as[String].collect() // 8234.236367281475, MR=7133.091085271318
+
+val goodComments = good.agg(sum("comment_count")/goodNumber).as[String].collect() // 8587.243958885756, MR=8723.434044724252
+
+val badComments = bad.agg(sum("comment_count")/badNumber).as[String].collect() // 13236.336622245002, MR=13390.349005424954
+
+// Result
+val classificationDF = Seq(("neutral", neutralNumber, neutralComments(0)),("good", goodNumber, goodComments(0)), ("bad",  badNumber, badComments(0))).toDF("Classification", "Count", "Average Comments")
+classificationDF.show()
+
+
+
+
+//TODO Aggiungere una nuova colonna per la classificazione e raggruppare in base a quella (???)
+//trendingVideosUnionDF.registerTempTable("trendingVideos")
+//val trendingVideosClassDF = sqlContext.sql("select * where(likes/(dislikes) > 6) as classification from trendingVideos")
+//good.groupBy("classification").(sum("comment_count")/good.count())
