@@ -44,6 +44,6 @@ val trendingVideosJoinCategoryDF = trendingVideosUnionDF.join(categoryNames, tre
 //Nel caso volessimo la colonna Category nella vecchia posisizione di category_id
 val reorderedColumnNames: Array[String] = Array("video_id", "trending_date", "title", "channel_title", "category", "publish_time", "tags", "views", "likes", "dislikes", "comment_count", "thumbnail_link", "comments_disabled", "ratings_disabled", "video_error_or_removed", "description")
 
-val unionDFCategoryOrdered = trendingVideosJoinCategoryDF.select(reorderedColumnNames.head, reorderedColumnNames.tail: _*)
+val trengingVideosDFCategoryOrdered = trendingVideosJoinCategoryDF.select(reorderedColumnNames.head, reorderedColumnNames.tail: _*)
 
 
