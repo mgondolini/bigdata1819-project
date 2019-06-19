@@ -28,7 +28,7 @@ val categoryNames = sqlContext.read.json(categoryJsonFilePath)
 //val videosDF = sqlContext.createDataFrame(rowRDD, schema)
 
 // SPARK SHELL 2
-//.option("mode", "DROPMALFORMED").
+
 val CaDF = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(caVideosCsvFilePath)
 
 val GbDF = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(gbVideosCsvFilePath)
@@ -36,15 +36,7 @@ val GbDF = sqlContext.read.format("csv").option("delimiter", ",").option("header
 val UsDF = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(usVideosCsvFilePath)
 
 // UNION
-
-// Alternativa
-val unionWhileLoading = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(gbVideosCsvFilePath,usVideosCsvFilePath,caVideosCsvFilePath)
-
-
-// Da controllare HEADER
-val trendingVideosUnionDF = CaDF.union(GbDF).union(UsDF).filter("comments_disabled == 'False' AND ratings_disabled == 'False'")
-
-val t = trendingVideosUnionDF.withColumn("dislikes", when(col("dislikes").equalTo("0"), "1").otherwise(col("dislikes")))
+val trendingVideosUnionDF = CaDF.union(GbDF).union(UsDF).filter("comments_disabled == 'False' AND ratings_disabled == 'False'").withColumn("dislikes", when(col("dislikes").equalTo("0"), "1").otherwise(col("dislikes")))
 
 // Classification
 val neutral = trendingVideosUnionDF.where("likes/dislikes >= 4 AND likes/dislikes <= 6") // 4988, MR=7224.0, 5058

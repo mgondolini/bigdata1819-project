@@ -40,8 +40,6 @@ public class Job1 {
 				int comments = Integer.valueOf(tokens[10]);
 				int views = Integer.valueOf(tokens[7]);
 
-				if(comments==0) comments = 1;
-
 				commentsIndex.set(comments);
 
 				if(dislikes == 0) dislikes = 1;
