@@ -21,15 +21,28 @@ public class TrendingVideosUnion {
         private Text newLine = new Text();
 
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+//            String line = value.toString();
+//            StringTokenizer tokenizer = new StringTokenizer(line, ",");
+//            int i = 0;
+//            while(tokenizer.hasMoreTokens() && i == 0){
+//                newKey.set(tokenizer.nextToken());
+//                i++;
+//            }
+//            newLine.set(line);
             String line = value.toString();
-            StringTokenizer tokenizer = new StringTokenizer(line, ",");
-            int i = 0;
-            while(tokenizer.hasMoreTokens() && i == 0){
-                newKey.set(tokenizer.nextToken());
-                i++;
+            String[] tokens = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", 14);
+
+            if(tokens[0].equals("video_id") || tokens[12].equals("True") || tokens[13].equals("True")) {
+                return;
+            } else {
+                int dislikes = Integer.valueOf(tokens[9]);
+                int comments = Integer.valueOf(tokens[10]);
+
+                if (comments == 0) comments = 1;
+                if (dislikes == 0) dislikes = 1;
+
+                context.write(new Text(key.toString()), value);
             }
-            newLine.set(line);
-            context.write(newKey, newLine);
         }
     }
 

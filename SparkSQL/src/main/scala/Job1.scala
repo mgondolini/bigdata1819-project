@@ -9,10 +9,10 @@ val sc = new SparkContext(new SparkConf().setAppName("Youtube Trending Videos"))
 val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
 // File path
-val categoryJsonFilePath: String = "dataset/US_category_id_flat.json"
-val caVideosCsvFilePath: String = "dataset/CAvideos.csv"
-val gbVideosCsvFilePath: String = "dataset/GBvideos.csv"
-val usVideosCsvFilePath: String = "dataset/USvideos.csv"
+val categoryJsonFilePath: String = "project/dataset/US_category_id_flat.json"
+val caVideosCsvFilePath: String = "project/dataset/cleaned/CAvideos.csv"
+val gbVideosCsvFilePath: String = "project/dataset/cleaned/GBvideos.csv"
+val usVideosCsvFilePath: String = "project/dataset/cleaned/USvideos.csv"
 
 
 // Import data from JSON file to DataFrame
@@ -28,7 +28,7 @@ val categoryNames = sqlContext.read.json(categoryJsonFilePath)
 //val videosDF = sqlContext.createDataFrame(rowRDD, schema)
 
 // SPARK SHELL 2
-
+//.option("mode", "DROPMALFORMED").
 val CaDF = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(caVideosCsvFilePath)
 
 val GbDF = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(gbVideosCsvFilePath)
@@ -37,20 +37,23 @@ val UsDF = sqlContext.read.format("csv").option("delimiter", ",").option("header
 
 // UNION
 
-// Da controllare HEADER
-val trendingVideosUnionDF = CaDF.unionAll(GbDF).unionAll(UsDF)
-
 // Alternativa
 val unionWhileLoading = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(gbVideosCsvFilePath,usVideosCsvFilePath,caVideosCsvFilePath)
 
+
+// Da controllare HEADER
+val trendingVideosUnionDF = CaDF.union(GbDF).union(UsDF).filter("comments_disabled == 'False' AND ratings_disabled == 'False'")
+
+val t = trendingVideosUnionDF.withColumn("dislikes", when(col("dislikes").equalTo("0"), "1").otherwise(col("dislikes")))
+
 // Classification
-val neutral = trendingVideosUnionDF.where("likes/(dislikes) > 4 AND likes/(dislikes) < 6 ") // 4988, MR=7224.0
+val neutral = trendingVideosUnionDF.where("likes/dislikes >= 4 AND likes/dislikes <= 6") // 4988, MR=7224.0, 5058
 val neutralNumber = neutral.count()
 
-val good = trendingVideosUnionDF.where("likes/(dislikes) > 6") // 106727, MR=:03881.0
+val good = trendingVideosUnionDF.where("likes/dislikes > 6") // 106727, MR=103881.0
 val goodNumber = good.count()
 
-val bad = trendingVideosUnionDF.where("likes/(dislikes) < 4") // 7804, MR=7742.0
+val bad = trendingVideosUnionDF.where("likes/dislikes < 4") // 7804, MR=7742.0
 val badNumber = bad.count()
 
 // Average number of comments for classification
@@ -65,9 +68,11 @@ val classificationDF = Seq(("neutral", neutralNumber, neutralComments(0)),("good
 classificationDF.show()
 
 
-
-
 //TODO Aggiungere una nuova colonna per la classificazione e raggruppare in base a quella (???)
 //trendingVideosUnionDF.registerTempTable("trendingVideos")
 //val trendingVideosClassDF = sqlContext.sql("select * where(likes/(dislikes) > 6) as classification from trendingVideos")
 //good.groupBy("classification").(sum("comment_count")/good.count())
+
+/*val names = test.filter(test("id").equalTo("200"))
+                .select("name")
+                .collectAsList() // returns a List[Row]*/

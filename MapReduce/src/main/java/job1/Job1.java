@@ -46,11 +46,11 @@ public class Job1 {
 
 				if(dislikes == 0) dislikes = 1;
 
-				if((likes/(dislikes)) > THRESHOLD_MAX){
+				if((likes/dislikes) > THRESHOLD_MAX){
 					classification.set(GOOD);
-				}else if((likes/(dislikes)) < THRESHOLD_MIN){
+				}else if((likes/dislikes) < THRESHOLD_MIN){
 					classification.set(BAD);
-				}else{
+				}else if((likes/dislikes) >= THRESHOLD_MIN && (likes/dislikes) <= THRESHOLD_MAX){
 					classification.set(NEUTRAL);
 				}
 			}

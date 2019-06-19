@@ -1,7 +1,7 @@
 // Local init
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{DataFrame, Row}
 
 val sc = new SparkContext(new SparkConf().setAppName("Youtube Trending Videos"))
 
@@ -37,13 +37,43 @@ val UsDF = sqlContext.read.format("csv").option("delimiter", ",").option("header
 
 
 //da controllare HEADER
-val trendingVideosUnionDF = CaDF.unionAll(GbDF).unionAll(UsDF)
+val trendingVideosUnionDF = CaDF.union(GbDF).union(UsDF)
 
-val trendingVideosJoinCategoryDF = trendingVideosUnionDF.join(categoryNames, trendingVideosUnionDF("category_id")===categoryNames("id"), "left").drop("category_id").drop("id")
+//val trendingVideosJoinCategoryDF = trendingVideosUnionDF.join(categoryNames, trendingVideosUnionDF("category_id")===categoryNames("id"), "left").drop("category_id").drop("id")
 
-//Nel caso volessimo la colonna Category nella vecchia posisizione di category_id
-val reorderedColumnNames: Array[String] = Array("video_id", "trending_date", "title", "channel_title", "category", "publish_time", "tags", "views", "likes", "dislikes", "comment_count", "thumbnail_link", "comments_disabled", "ratings_disabled", "video_error_or_removed", "description")
+val broadcastVideosJoin = trendingVideosUnionDF.join(broadcast(categoryNames.withColumnRenamed("id", "category_id")), "category_id")
 
-val trengingVideosDFCategoryOrdered = trendingVideosJoinCategoryDF.select(reorderedColumnNames.head, reorderedColumnNames.tail: _*)
+// Nel caso volessimo la colonna Category nella vecchia posisizione di category_id
+val reorderedColumnNames: Array[String] = Array("video_id", "trending_date", "title", "channel_title", "category_id", "category", "publish_time", "tags", "views", "likes", "dislikes", "comment_count", "thumbnail_link", "comments_disabled", "ratings_disabled", "video_error_or_removed", "description")
+val trendingVideosDFCategoryOrdered = broadcastVideosJoin.select(reorderedColumnNames.head, reorderedColumnNames.tail: _*)
 
+// Seleziona le colonne category e tags
+val categoryTags = trendingVideosDFCategoryOrdered.select("category_id", "category", "tags")
+//Si può fare anche così
+//trendingVideosDFCategoryOrdered.registerTempTable("trendingVideos")
+//val categoryTags2 = sqlContext.sql("select category, tags from trendingVideos")
+
+// Raggruppa i tag per categoria
+val groupedByCategory = categoryTags.groupBy(col("category_id"), col("category")).agg(collect_list(col("tags")) as "tags").withColumn("tags", split(concat_ws(",", col("tags")), "(\\|)"))
+groupedByCategory.show()
+
+// Converte il formato della colonna tags da Array[String] a String
+val groupedByCategoryString = groupedByCategory.as[(String, String, Array[String])].map { case (id, category, tags) => (id, category, tags.mkString(",")) }.toDF("category_id","category", "tags")
+groupedByCategoryString.show()
+
+// Stampa i tag per categoria
+groupedByCategory.select("category_id","category","tags").take(1).foreach(println)
+
+
+
+
+
+
+
+
+// ------ COSE UTILI -------
+// Trasformare il DF in RDD
+val rows = groupedByCategory.rdd
+// Prendere un elemento della riga
+rows.map(row => row.get(1).asInstanceOf[String])
 
