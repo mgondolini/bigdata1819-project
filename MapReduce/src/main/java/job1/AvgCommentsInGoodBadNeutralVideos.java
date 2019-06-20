@@ -15,22 +15,26 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.IOException;
 
-public class Job1 {
+public class AvgCommentsInGoodBadNeutralVideos {
 
 	private final static String GOOD = "good";
 	private final static String BAD = "bad";
 	private final static String NEUTRAL = "neutral";
 	private final static int THRESHOLD_MAX = 6;
 	private final static int THRESHOLD_MIN = 4;
+	private final static String SPLIT_REGEX = ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)";
+	private final static int FIELDS_NUMBER = 14;
+
 
 	public static class CommentsMapper extends Mapper<Object, Text, Text, IntWritable> {
+
 		private Text classification = new Text();
 		private IntWritable commentsIndex = new IntWritable();
 
 		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
 
 			String line = value.toString();
-			String[] tokens = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", 14);
+			String[] tokens = line.split(SPLIT_REGEX, FIELDS_NUMBER);
 
 			if(tokens[0].equals("video_id") || tokens[12].equals("True") || tokens[13].equals("True")) {
 				return;
@@ -65,32 +69,33 @@ public class Job1 {
 				count++;
 				tot += value.get();
 			}
-			context.write(new Text(key+" count:"+count), new DoubleWritable(tot / count));
+			context.write(new Text(key + " count:" + count), new DoubleWritable(tot / count));
 		}
 	}
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
-		Configuration conf = new Configuration();
-		Job job = Job.getInstance(conf, "job1");
 
-		job.setJarByClass(Job1.class);
+		Configuration conf = new Configuration();
+		Job job = Job.getInstance(conf, "Relation between YouTube Video's comments, like and dislikes");
+
+		job.setJarByClass(AvgCommentsInGoodBadNeutralVideos.class);
+
 		job.setMapperClass(CommentsMapper.class);
-		job.setMapOutputKeyClass(Text.class);
-		job.setMapOutputValueClass(IntWritable.class);
 		job.setReducerClass(CommentsReducer.class);
 
+		job.setMapOutputKeyClass(Text.class);
+		job.setMapOutputValueClass(IntWritable.class);
+
 		FileSystem fs = FileSystem.get(new Configuration());
-		Path outputPath = new Path(args[0]);
+		Path outputPath = new Path(args[3]);
 		if (fs.exists(outputPath)) {
 			fs.delete(outputPath, true);
 		}
 		FileOutputFormat.setOutputPath(job, outputPath);
 
+		MultipleInputs.addInputPath(job, new Path(args[0]), TextInputFormat.class, CommentsMapper.class);
 		MultipleInputs.addInputPath(job, new Path(args[1]), TextInputFormat.class, CommentsMapper.class);
 		MultipleInputs.addInputPath(job, new Path(args[2]), TextInputFormat.class, CommentsMapper.class);
-		MultipleInputs.addInputPath(job, new Path(args[3]), TextInputFormat.class, CommentsMapper.class);
-
-		//MI 4 con categorie json
 
 		System.exit(job.waitForCompletion(true) ? 0 : 1);
 	}
