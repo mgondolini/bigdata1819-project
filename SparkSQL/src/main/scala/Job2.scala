@@ -68,4 +68,3 @@ groupedByCategory.show()
 // Stampa tutto
 groupedByCategory.collect().foreach(println)
 
-//TODO togliere [none] dai tag
