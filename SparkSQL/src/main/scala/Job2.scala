@@ -35,34 +35,30 @@ val categoryTags = sqlContext.sql("select category, tags from trendingVideosTmp"
 categoryTags.show()
 
 // Explode tag list
-val categoryTagsExploded = categoryTags.withColumn("tags", explode(split($"tags", "(\\|)")))
+val categoryTagsExploded = categoryTags.withColumn("tags", explode(split($"tags", "(\\|)"))).filter("tags != '[None]'")
 categoryTagsExploded.registerTempTable("categoryTagsExplodedTmp")
+
 
 // Count the same tags for each category, create a column count_tag
 val tagsCount = sqlContext.sql("select category, tags, COUNT(*) from categoryTagsExplodedTmp group by category, tags").withColumnRenamed("count(1)", "count_tag")
 tagsCount.show()
 tagsCount.registerTempTable("tagsCountTmp")
 
-// Order tags by category and descending count value
-val orderCategoryTags = sqlContext.sql("select * from tagsCountTmp order by category, count_tag desc")
-orderCategoryTags.registerTempTable("orderCategoryTags")
-
-//TODO forse non serve orderTags e si può fare tutto con questa query
+// Select top 10 rows for each category
 val top10query = """ select category, tags, count_tag
 				from (select *, row_number() over (partition by category order by category, count_tag desc) as top_n_rows
-				      from orderCategoryTags
+				      from tagsCountTmp
 				     ) a
 				where top_n_rows <= 10
 				order by a.category, a.count_tag desc """
 
-// Select top 10 rows for each category
 val top10CategoryTags =  sqlContext.sql(top10query)
 top10CategoryTags.show()
 
 import org.apache.spark.sql.functions.struct
 
 // Collapse tags and count_tags column values in one column "tags:count"
-val collapsedTagsCount = top10CategoryTags.withColumn("tags:count", struct(tagsNumber("tags"), tagsNumber("count_tag"))).drop("tags").drop("count_tag")
+val collapsedTagsCount = top10CategoryTags.withColumn("tags:count", struct(tagsCount("tags"), tagsCount("count_tag"))).drop("tags").drop("count_tag")
 collapsedTagsCount.show()
 
 // Group Dataframe by category, creating a list of tags:count in column top10_tags
@@ -71,3 +67,5 @@ groupedByCategory.show()
 
 // Stampa tutto
 groupedByCategory.collect().foreach(println)
+
+//TODO togliere [none] dai tag
