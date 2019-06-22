@@ -48,11 +48,13 @@ public class AvgCommentsInGoodBadNeutralVideos {
 
 				if(dislikes == 0) dislikes = 1;
 
-				if((likes/dislikes) > THRESHOLD_MAX){
+				float rate = likes/dislikes;
+
+				if(rate > THRESHOLD_MAX){
 					classification.set(GOOD);
-				}else if((likes/dislikes) < THRESHOLD_MIN){
+				}else if(rate < THRESHOLD_MIN){
 					classification.set(BAD);
-				}else if((likes/dislikes) >= THRESHOLD_MIN && (likes/dislikes) <= THRESHOLD_MAX){
+				}else {
 					classification.set(NEUTRAL);
 				}
 			}

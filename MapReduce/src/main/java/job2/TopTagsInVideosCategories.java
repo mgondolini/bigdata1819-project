@@ -84,28 +84,46 @@ public class TopTagsInVideosCategories {
 
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 
-			TreeSet<String> tagWithOccurrences = new TreeSet<>();
+			List<String> tagWithOccurrences = new ArrayList<>();
+
+//			TreeSet<String> tagWithOccurrences = new TreeSet<>();
+//			TreeMap<Integer, String> tagWithOccurrences = new TreeMap<>();
 
 			for(Text t: values){
 				String[] valueTokens = t.toString().split(":", 3);
 				try {
-//					int occurrences = Integer.parseInt(valueTokens[1]);
-					tagWithOccurrences.add(valueTokens[1] + "=" + valueTokens[0]);
+					int occurrences = Integer.parseInt(valueTokens[1]);
+					tagWithOccurrences.add(occurrences + "__" + valueTokens[0]);
+//					tagWithOccurrences.put(occurrences, valueTokens[0]);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
 
-			ArrayList<String> topTags = new ArrayList<>();
+			Collections.sort(tagWithOccurrences, new Comparator<String>() {
+				public int compare(String o1, String o2) {
+					int occurence1 = Integer.parseInt(o1.split("__")[0]);
+					int occurence2 = Integer.parseInt(o2.split("__")[0]);
+					return occurence2 - occurence1;
+				}
+			});
 
 			int n = 0;
 
-			Iterator<String> iterator = tagWithOccurrences.descendingSet().iterator();
+			List<String> topTags = new ArrayList<>();
+			Iterator<String> iterator = tagWithOccurrences.iterator();
 
 			while (n < 10 && iterator.hasNext()) {
 				topTags.add(iterator.next());
 				n++;
 			}
+//			if (tagWithOccurrences.size() > 10) {
+//				Integer lastKeyToKeep = (Integer) tagWithOccurrences.descendingMap().keySet().toArray()[10];
+//				Map<Integer, String> mostUsedTags = tagWithOccurrences.descendingMap().headMap(lastKeyToKeep);
+//				context.write(key, new Text(mostUsedTags.toString()));
+//			} else {
+//				context.write(key, new Text(tagWithOccurrences.toString()));
+//			}
 
 			context.write(key, new Text(topTags.toString()));
 		}
