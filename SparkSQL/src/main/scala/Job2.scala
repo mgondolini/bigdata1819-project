@@ -54,17 +54,36 @@ val top10query = """ select category, tags, count_tag
 
 val top10CategoryTags =  sqlContext.sql(top10query)
 top10CategoryTags.show()
-
-import org.apache.spark.sql.functions.struct
+top10CategoryTags.registerTempTable("top10CategoryTagsTmp")
 
 // Collapse tags and count_tags column values in one column "tags:count"
-val collapsedTagsCount = top10CategoryTags.withColumn("tags:count", struct(tagsCount("tags"), tagsCount("count_tag"))).drop("tags").drop("count_tag")
+val collapsedTagsCount = sqlContext.sql("SELECT category, CONCAT(tags, ':', count_tag) FROM top10CategoryTagsTmp").withColumnRenamed("concat(tags, :, CAST(count_tag AS STRING))", "tags:count")
 collapsedTagsCount.show()
 
 // Group Dataframe by category, creating a list of tags:count in column top10_tags
 val groupedByCategory = collapsedTagsCount.groupBy("category").agg(collect_list(col("tags:count")) as "top10_tags")
 groupedByCategory.show()
-
-// Stampa tutto
 groupedByCategory.collect().foreach(println)
+
+// PER UNA VISUALIZZAZIONE MIGLIORE
+val groupedByCategoryString = groupedByCategory.as[( String, Array[String])].map { case (category, top10_tags) => (category, top10_tags.mkString(",")) }.toDF("category", "top10_tags")
+groupedByCategoryString.show()
+groupedByCategoryString.collect().foreach(println)
+
+// VISUALIZZAZIONE TABELLA: una colonna per ogni tag in top10
+groupedByCategoryString.registerTempTable("groupedByCategoryStringTmp")
+val split = sqlContext.sql("select category, split(top10_tags, ',') AS top10_tags FROM groupedByCategoryStringTmp")
+
+split.registerTempTable("splitTmp")
+val query =
+  """select category, top10_tags[0] AS 1st, top10_tags[1] AS 2nd,
+    | top10_tags[2] AS 3rd, top10_tags[3] AS 4th, top10_tags[4] AS 5th,
+    | top10_tags[5] AS 6th, top10_tags[6] AS 7th, top10_tags[7] AS 8th,
+    | top10_tags[8] AS 9th, top10_tags[9] AS 10th
+    | FROM splitTmp""".stripMargin
+val result = sqlContext.sql(query)
+result.show(false)
+
+
+
 
