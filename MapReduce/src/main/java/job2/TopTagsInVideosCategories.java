@@ -44,7 +44,7 @@ public class TopTagsInVideosCategories {
 			String[] tags = tokens[6].split("(\\|)");
 			for (String tag : tags) {
 				if(!tag.equals("[none]")) {
-					categoryTagKey.set(tokens[4].concat(":" + tag));
+					categoryTagKey.set(tokens[4].concat(":" + tag.toLowerCase()));
 					context.write(categoryTagKey, one);
 				}
 			}
@@ -86,15 +86,11 @@ public class TopTagsInVideosCategories {
 
 			List<String> tagWithOccurrences = new ArrayList<>();
 
-//			TreeSet<String> tagWithOccurrences = new TreeSet<>();
-//			TreeMap<Integer, String> tagWithOccurrences = new TreeMap<>();
-
 			for(Text t: values){
 				String[] valueTokens = t.toString().split(":", 3);
 				try {
 					int occurrences = Integer.parseInt(valueTokens[1]);
 					tagWithOccurrences.add(occurrences + "__" + valueTokens[0]);
-//					tagWithOccurrences.put(occurrences, valueTokens[0]);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -114,16 +110,10 @@ public class TopTagsInVideosCategories {
 			Iterator<String> iterator = tagWithOccurrences.iterator();
 
 			while (n < 10 && iterator.hasNext()) {
-				topTags.add(iterator.next());
+				String[] valueTokens = iterator.next().split("__", 2);
+				topTags.add(valueTokens[0] + "->" + valueTokens[1]);
 				n++;
 			}
-//			if (tagWithOccurrences.size() > 10) {
-//				Integer lastKeyToKeep = (Integer) tagWithOccurrences.descendingMap().keySet().toArray()[10];
-//				Map<Integer, String> mostUsedTags = tagWithOccurrences.descendingMap().headMap(lastKeyToKeep);
-//				context.write(key, new Text(mostUsedTags.toString()));
-//			} else {
-//				context.write(key, new Text(tagWithOccurrences.toString()));
-//			}
 
 			context.write(key, new Text(topTags.toString()));
 		}
@@ -172,7 +162,9 @@ public class TopTagsInVideosCategories {
 				}
 			}
 
-			context.write(new Text(categoryName), new Text(categoryTags));
+			if(!categoryTags.equals("")) {
+				context.write(new Text(categoryName), new Text(categoryTags));
+			}
 		}
 	}
 
@@ -195,8 +187,8 @@ public class TopTagsInVideosCategories {
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 		Configuration conf = new Configuration();
 		ArrayList<Job> jobs = new ArrayList<>();
-		jobs.add(Job.getInstance(conf, "Category:Tag > Total"));
-		jobs.add(Job.getInstance(conf, "Orders tag by occurrences grouped by category"));
+		jobs.add(Job.getInstance(conf, "Category:Tag | Total"));
+		jobs.add(Job.getInstance(conf, "Ordering tags by occurrences grouped by category"));
 		jobs.add(Job.getInstance(conf, "Join category id with category name"));
 
 		for (Job job: jobs){

@@ -26,15 +26,19 @@ val UsDF = sqlContext.read.format("csv").option("delimiter", ",").option("header
 
 // UNION
 val trendingVideosUnionDF = CaDF.union(GbDF).union(UsDF).filter("comments_disabled == 'False' AND ratings_disabled == 'False'").withColumn("dislikes", when(col("dislikes").equalTo("0"), "1").otherwise(col("dislikes")))
+trendingVideosUnionDF.cache()
 
 // Classification
 val neutralVideosDF = trendingVideosUnionDF.where("likes/dislikes >= 4 AND likes/dislikes <= 6")
+neutralVideosDF.cache()
 val neutralNumber = neutralVideosDF.count()
 
 val goodVideosDF = trendingVideosUnionDF.where("likes/dislikes > 6")
+goodVideosDF.cache()
 val goodNumber = goodVideosDF.count()
 
 val badVideosDF = trendingVideosUnionDF.where("likes/dislikes < 4")
+badVideosDF.cache()
 val badNumber = badVideosDF.count()
 
 // Average number of comments for classification
