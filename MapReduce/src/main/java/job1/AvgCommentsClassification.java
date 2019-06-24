@@ -15,13 +15,13 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.IOException;
 
-public class AvgCommentsInGoodBadNeutralVideos {
+public class AvgCommentsClassification {
 
 	private final static String GOOD = "good";
 	private final static String BAD = "bad";
 	private final static String NEUTRAL = "neutral";
-	private final static int THRESHOLD_MAX = 6;
-	private final static int THRESHOLD_MIN = 4;
+	private final static double THRESHOLD_MAX = 6.0;
+	private final static double THRESHOLD_MIN = 4.0;
 	private final static String SPLIT_REGEX = ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)";
 	private final static int FIELDS_NUMBER = 14;
 
@@ -39,8 +39,8 @@ public class AvgCommentsInGoodBadNeutralVideos {
 			if(tokens[0].equals("video_id") || tokens[12].equals("True") || tokens[13].equals("True")) {
 				return;
 			} else {
-				int likes = Integer.valueOf(tokens[8]);
-				int dislikes = Integer.valueOf(tokens[9]);
+				double likes = Double.valueOf(tokens[8]);
+				double dislikes = Double.valueOf(tokens[9]);
 				int comments = Integer.valueOf(tokens[10]);
 				int views = Integer.valueOf(tokens[7]);
 
@@ -48,7 +48,7 @@ public class AvgCommentsInGoodBadNeutralVideos {
 
 				if(dislikes == 0) dislikes = 1;
 
-				float rate = likes/dislikes;
+				double rate = likes/dislikes;
 
 				if(rate > THRESHOLD_MAX){
 					classification.set(GOOD);
@@ -71,16 +71,16 @@ public class AvgCommentsInGoodBadNeutralVideos {
 				count++;
 				tot += value.get();
 			}
-			context.write(new Text(key + " count:" + count), new DoubleWritable(tot / count));
+			context.write(new Text(key + " videos:" + count + " - average comments: "), new DoubleWritable(tot / count));
 		}
 	}
 
 	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 
 		Configuration conf = new Configuration();
-		Job job = Job.getInstance(conf, "Relation between YouTube Video's comments, like and dislikes");
+		Job job = Job.getInstance(conf, "Relation between YouTube Video's comments, likes and dislikes");
 
-		job.setJarByClass(AvgCommentsInGoodBadNeutralVideos.class);
+		job.setJarByClass(AvgCommentsClassification.class);
 
 		job.setMapperClass(CommentsMapper.class);
 		job.setReducerClass(CommentsReducer.class);
