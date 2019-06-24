@@ -35,7 +35,7 @@ val categoryTags = sqlContext.sql("select category, tags from trendingVideosTmp"
 categoryTags.show()
 
 // Explode tag list
-val categoryTagsExploded = categoryTags.withColumn("tags", explode(split($"tags", "(\\|)"))).filter("tags != '[None]'")
+val categoryTagsExploded = categoryTags.withColumn("tags", explode(split($"tags", "(\\|)"))).filter("tags != '[none]'")
 categoryTagsExploded.registerTempTable("categoryTagsExplodedTmp")
 
 
@@ -74,15 +74,7 @@ groupedByCategoryString.collect().foreach(println)
 groupedByCategoryString.registerTempTable("groupedByCategoryStringTmp")
 val split = sqlContext.sql("select category, split(top10_tags, ',') AS top10_tags FROM groupedByCategoryStringTmp")
 
-split.registerTempTable("splitTmp")
-val query =
-  """select category, top10_tags[0] AS 1st, top10_tags[1] AS 2nd,
-    | top10_tags[2] AS 3rd, top10_tags[3] AS 4th, top10_tags[4] AS 5th,
-    | top10_tags[5] AS 6th, top10_tags[6] AS 7th, top10_tags[7] AS 8th,
-    | top10_tags[8] AS 9th, top10_tags[9] AS 10th
-    | FROM splitTmp""".stripMargin
-val result = sqlContext.sql(query)
-result.show(false)
+
 
 
 
