@@ -28,21 +28,21 @@ val trendingVideosUnionDF = CaDF.union(GbDF).union(UsDF)
 
 // JOIN
 val broadcastVideosJoin = trendingVideosUnionDF.join(broadcast(categoryNames.withColumnRenamed("id", "category_id")), "category_id")
-broadcastVideosJoin.registerTempTable("trendingVideosTmp")
+broadcastVideosJoin.createOrReplaceTempView("trendingVideosTmp")
 
 // Dataframe composed by category and tags columns
 val categoryTags = sqlContext.sql("select category, tags from trendingVideosTmp")
 categoryTags.show()
 
 // Explode tag list
-val categoryTagsExploded = categoryTags.withColumn("tags", explode(split($"tags", "(\\|)"))).filter("tags != '[none]'")
-categoryTagsExploded.registerTempTable("categoryTagsExplodedTmp")
+val categoryTagsExploded = categoryTags.withColumn("tags", explode(split($"tags", "(\\|)"))).filter("tags != '[none]'").withColumn("tags", lower(col("tags")))
+categoryTagsExploded.createOrReplaceTempView("categoryTagsExplodedTmp")
 
 
 // Count the same tags for each category, create a column count_tag
 val tagsCount = sqlContext.sql("select category, tags, COUNT(*) from categoryTagsExplodedTmp group by category, tags").withColumnRenamed("count(1)", "count_tag")
 tagsCount.show()
-tagsCount.registerTempTable("tagsCountTmp")
+tagsCount.createOrReplaceTempView("tagsCountTmp")
 
 // Select top 10 rows for each category
 val top10query = """ select category, tags, count_tag
@@ -54,7 +54,7 @@ val top10query = """ select category, tags, count_tag
 
 val top10CategoryTags =  sqlContext.sql(top10query)
 top10CategoryTags.show()
-top10CategoryTags.registerTempTable("top10CategoryTagsTmp")
+top10CategoryTags.createOrReplaceTempView("top10CategoryTagsTmp")
 
 // Collapse tags and count_tags column values in one column "tags:count"
 val collapsedTagsCount = sqlContext.sql("SELECT category, CONCAT(tags, ':', count_tag) FROM top10CategoryTagsTmp").withColumnRenamed("concat(tags, :, CAST(count_tag AS STRING))", "tags:count")
