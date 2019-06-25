@@ -72,10 +72,6 @@ val groupedByCategoryString = groupedByCategory.as[( String, Array[String])].map
 groupedByCategoryString.show()
 groupedByCategoryString.collect().foreach(println)
 
-// VISUALIZZAZIONE TABELLA: una colonna per ogni tag in top10
-groupedByCategoryString.registerTempTable("groupedByCategoryStringTmp")
-val split = sqlContext.sql("select category, split(top10_tags, ',') AS top10_tags FROM groupedByCategoryStringTmp")
-
 
 
 
