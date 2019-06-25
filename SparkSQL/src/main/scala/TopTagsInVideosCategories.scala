@@ -53,8 +53,8 @@ val top10query = """ select category, tags, count_tag
 				order by a.category, a.count_tag desc """
 
 val top10CategoryTags =  sqlContext.sql(top10query)
-top10CategoryTags.show()
 top10CategoryTags.cache()
+top10CategoryTags.show()
 //top10CategoryTags.createOrReplaceTempView("top10CategoryTagsTmp")
 
 import org.apache.spark.sql.functions._
