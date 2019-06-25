@@ -16,8 +16,7 @@ val usVideosCsvFilePath: String = "project/dataset/cleaned/USvideos.csv"
 // Import data from JSON file to DataFrame
 val categoryNames = sqlContext.read.json(categoryJsonFilePath)
 
-// SPARK SHELL 2
-
+// Import data from CSV to DataFrame
 val CaDF = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(caVideosCsvFilePath)
 
 val GbDF = sqlContext.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(gbVideosCsvFilePath)
@@ -28,17 +27,26 @@ val UsDF = sqlContext.read.format("csv").option("delimiter", ",").option("header
 val trendingVideosUnionDF = CaDF.union(GbDF).union(UsDF).filter("comments_disabled == 'False' AND ratings_disabled == 'False'").withColumn("dislikes", when(col("dislikes").equalTo("0"), "1").otherwise(col("dislikes")))
 trendingVideosUnionDF.cache()
 
-// Classification
-val neutralVideosDF = trendingVideosUnionDF.where("likes/dislikes >= 4 AND likes/dislikes <= 6")
+// Empirically computed Threshold
+object Threshold{
+  val MIN = 4
+  val MAX = 6
+}
+
+// Classification for neutral, good and bad videos computed considering likes/dislikes ratio
+val neutralVideosDF = trendingVideosUnionDF.where("likes/dislikes >= " + Threshold.MIN + " AND likes/dislikes <= " + Threshold.MAX)
 neutralVideosDF.cache()
+
 val neutralNumber = neutralVideosDF.count()
 
-val goodVideosDF = trendingVideosUnionDF.where("likes/dislikes > 6")
+val goodVideosDF = trendingVideosUnionDF.where("likes/dislikes > " + Threshold.MAX)
 goodVideosDF.cache()
+
 val goodNumber = goodVideosDF.count()
 
-val badVideosDF = trendingVideosUnionDF.where("likes/dislikes < 4")
+val badVideosDF = trendingVideosUnionDF.where("likes/dislikes < " + Threshold.MIN)
 badVideosDF.cache()
+
 val badNumber = badVideosDF.count()
 
 // Average number of comments for classification
@@ -49,5 +57,5 @@ val goodComments = goodVideosDF.agg(sum("comment_count")/goodNumber).as[String].
 val badComments = badVideosDF.agg(sum("comment_count")/badNumber).as[String].collect()
 
 // Result
-val classificationDF = Seq(("neutralVideosDF", neutralNumber, neutralComments(0)),("goodVideosDF", goodNumber, goodComments(0)), ("bad",  badNumber, badComments(0))).toDF("Classification", "Videos Number", "Average Comments")
+val classificationDF = Seq(("neutral", neutralNumber, neutralComments(0)),("good", goodNumber, goodComments(0)), ("bad",  badNumber, badComments(0))).toDF("Classification", "Videos Number", "Average Comments")
 classificationDF.show()
