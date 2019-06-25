@@ -54,14 +54,16 @@ val top10query = """ select category, tags, count_tag
 
 val top10CategoryTags =  sqlContext.sql(top10query)
 top10CategoryTags.show()
-top10CategoryTags.createOrReplaceTempView("top10CategoryTagsTmp")
+top10CategoryTags.cache()
+//top10CategoryTags.createOrReplaceTempView("top10CategoryTagsTmp")
 
-// Collapse tags and count_tags column values in one column "tags:count"
-val collapsedTagsCount = sqlContext.sql("SELECT category, CONCAT(tags, ':', count_tag) FROM top10CategoryTagsTmp").withColumnRenamed("concat(tags, :, CAST(count_tag AS STRING))", "tags:count")
-collapsedTagsCount.show()
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.expressions.Window
+import sqlContext.implicits._
 
-// Group Dataframe by category, creating a list of tags:count in column top10_tags
-val groupedByCategory = collapsedTagsCount.groupBy("category").agg(collect_list(col("tags:count")) as "top10_tags")
+//TODO fare con query sql
+// Group Dataframe by category, creating a list of concatenated column count_tag and tags in column top10_tags
+val groupedByCategory = top10CategoryTags.withColumn("top10_tags", collect_list(concat(col("count_tag"), lit(":"), col("tags"))).over(Window.partitionBy("category").orderBy($"count_tag".desc))).groupBy("category").agg(max(col("top10_tags")).as("top10_tags"))
 groupedByCategory.show()
 groupedByCategory.collect().foreach(println)
 
