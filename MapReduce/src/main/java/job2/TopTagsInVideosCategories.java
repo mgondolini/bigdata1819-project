@@ -8,244 +8,287 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.WritableComparable;
+import org.apache.hadoop.io.WritableComparator;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Partitioner;
+import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.KeyValueTextInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-
-import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
 import java.io.IOException;
-import java.util.*;
-
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 public class TopTagsInVideosCategories {
 
-	private final static String SPLIT_REGEX = ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)";
-	private final static int FIELDS_NUMBER = 11;
+    public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
+        Configuration conf = new Configuration();
+        ArrayList<Job> jobs = new ArrayList<>();
+        jobs.add(Job.getInstance(conf, "Category:Tag | Total"));
+        jobs.add(Job.getInstance(conf, "Category | [Tag:Total]"));
+        jobs.add(Job.getInstance(conf, "Category Name | [Tag:Total]"));
 
-	public static class CategoryTagMapper extends Mapper<Object, Text, Text, IntWritable> {
+        for (Job job: jobs){
+            job.setJarByClass(TopTagsInVideosCategories.class);
+        }
 
-		private Text categoryTagKey = new Text();
-		private final static IntWritable one = new IntWritable(1);
+        MultipleInputs.addInputPath(jobs.get(0), new Path(args[0]), TextInputFormat.class, TopTagsInVideosCategories.CategoryTagOccurenceMapper.class);
+        MultipleInputs.addInputPath(jobs.get(0), new Path(args[1]), TextInputFormat.class, TopTagsInVideosCategories.CategoryTagOccurenceMapper.class);
+        MultipleInputs.addInputPath(jobs.get(0), new Path(args[2]), TextInputFormat.class, TopTagsInVideosCategories.CategoryTagOccurenceMapper.class);
 
-		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-			String line = value.toString();
-			String[] tokens = line.split(SPLIT_REGEX, FIELDS_NUMBER);
+        jobs.get(0).setMapOutputKeyClass(Text.class);
+        jobs.get(0).setMapOutputValueClass(IntWritable.class);
+        jobs.get(0).setOutputFormatClass(TextOutputFormat.class);
+        jobs.get(0).setCombinerClass(TopTagsInVideosCategories.CategoryTagTotalReducer.class);
+        jobs.get(0).setReducerClass(TopTagsInVideosCategories.CategoryTagTotalReducer.class);
 
-			if (tokens[4].equals("category_id") || tokens[6].equals("tags")) {
-				return;
-			}
+        FileSystem fs = FileSystem.get(new Configuration());
+        Path firstJobOutputPath = new Path(args[3]);
+        if (fs.exists(firstJobOutputPath)) {
+            fs.delete(firstJobOutputPath, true);
+        }
+        FileOutputFormat.setOutputPath(jobs.get(0), firstJobOutputPath);
 
-			String[] tags = tokens[6].split("(\\|)");
-			for (String tag : tags) {
-				if(!tag.equals("[none]")) {
-					categoryTagKey.set(tokens[4].concat(":" + tag.toLowerCase()));
-					context.write(categoryTagKey, one);
-				}
-			}
-		}
-	}
+        FileInputFormat.addInputPath(jobs.get(1), firstJobOutputPath);
 
-	public static class CategoryTagReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
-		private IntWritable result = new IntWritable();
+        jobs.get(1).setInputFormatClass(KeyValueTextInputFormat.class);
+        jobs.get(1).setMapperClass(AddTotalToCategoryKeyMapper.class);
+        jobs.get(1).setReducerClass(CategoryTopTagReducer.class);
 
-		public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-			int sum = 0;
-			for (IntWritable val : values) {
-				sum += val.get();
-			}
-			result.set(sum);
-			context.write(key, result);
-		}
-	}
+        jobs.get(1).setPartitionerClass(CategoryPartitioner.class);
+        jobs.get(1).setSortComparatorClass(SortCategoryTotalComparator.class);
+        jobs.get(1).setGroupingComparatorClass(CategoryReduceGrouping.class);
 
-	public static class TagMapper extends Mapper<Text, Text, Text, Text> {
+        jobs.get(1).setMapOutputKeyClass(Text.class);
+        jobs.get(1).setMapOutputValueClass(Text.class);
 
-		private Text category = new Text();
-		private Text tagCount = new Text();
+        Path secondOutputPath = new Path(args[4]);
+        if (fs.exists(secondOutputPath)) {
+            fs.delete(secondOutputPath, true);
+        }
+        FileOutputFormat.setOutputPath(jobs.get(1), secondOutputPath);
 
-		public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
-			String[] tokens = key.toString().split(":", 2);
+        MultipleInputs.addInputPath(jobs.get(2), secondOutputPath, KeyValueTextInputFormat.class, DummyMapper.class);
+        MultipleInputs.addInputPath(jobs.get(2), new Path(args[6]), TextInputFormat.class, CategoryNamingMapper.class);
 
-			category.set(tokens[0]);
+        jobs.get(2).setReducerClass(CategoryNamingReducer.class);
+        jobs.get(2).setOutputKeyClass(Text.class);
+        jobs.get(2).setOutputValueClass(Text.class);
 
-			tagCount.set(tokens[1] + ":" + value.toString());
+        Path finalOutputPath = new Path(args[5]);
+        if (fs.exists(finalOutputPath)) {
+            fs.delete(finalOutputPath, true);
+        }
+        FileOutputFormat.setOutputPath(jobs.get(2), finalOutputPath);
 
-			context.write(category, tagCount);
-		}
-	}
+        for (Job job: jobs) {
+            if (!job.waitForCompletion(true)) {
+                System.exit(1);
+            }
+        }
+    }
 
-	public static class TagReducer extends Reducer<Text, Text, Text, Text> {
+    private final static String SPLIT_OPERATOR = "#";
 
-		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+    // JOB1
+    private final static String SPLIT_REGEX = ",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)";
+    private final static int FIELDS_NUMBER = 11;
 
-			List<String> tagWithOccurrences = new ArrayList<>();
+    public static class CategoryTagOccurenceMapper extends Mapper<Object, Text, Text, IntWritable> {
 
-			for(Text t: values){
-				String[] valueTokens = t.toString().split(":", 3);
-				try {
-					int occurrences = Integer.parseInt(valueTokens[1]);
-					tagWithOccurrences.add(occurrences + "__" + valueTokens[0]);
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-			}
+        private Text categoryTagKey = new Text();
+        private final static IntWritable one = new IntWritable(1);
 
-			Collections.sort(tagWithOccurrences, new Comparator<String>() {
-				public int compare(String o1, String o2) {
-					int occurence1 = Integer.parseInt(o1.split("__")[0]);
-					int occurence2 = Integer.parseInt(o2.split("__")[0]);
-					return occurence2 - occurence1;
-				}
-			});
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+            String line = value.toString();
+            String[] tokens = line.split(SPLIT_REGEX, FIELDS_NUMBER);
 
-			int n = 0;
+            if (tokens[4].equals("category_id") || tokens[6].equals("tags")) {
+                return;
+            }
 
-			List<String> topTags = new ArrayList<>();
-			Iterator<String> iterator = tagWithOccurrences.iterator();
+            String[] tags = tokens[6].split("(\\|)");
+            for (String tag : tags) {
+                if(!tag.equals("[none]")) {
+                    categoryTagKey.set(tokens[4].concat(SPLIT_OPERATOR + tag.toLowerCase()));
+                    context.write(categoryTagKey, one);
+                }
+            }
+        }
+    }
 
-			while (n < 10 && iterator.hasNext()) {
-				String[] valueTokens = iterator.next().split("__", 2);
-				topTags.add(valueTokens[0] + "->" + valueTokens[1]);
-				n++;
-			}
+    public static class CategoryTagTotalReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+        private IntWritable result = new IntWritable();
 
-			context.write(key, new Text(topTags.toString()));
-		}
-	}
+        public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+            int sum = 0;
+            for (IntWritable val : values) {
+                sum += val.get();
+            }
+            result.set(sum);
+            context.write(key, result);
+        }
+    }
 
+    // JOB2
+    public static class AddTotalToCategoryKeyMapper extends Mapper<Text, Text, Text, Text> {
 
-	public static class CategoryNameMapper extends Mapper<Object, Text, Text, Text> {
+        private Text category = new Text();
+        private Text tagCount = new Text();
 
-		static JsonFactory factory = new JsonFactory();
+        @Override
+        protected void map(Text key, Text value, Context context) throws IOException, InterruptedException {
 
-		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-			JsonParser parser = factory.createJsonParser(value.toString());
-			Text idCategoryString = new Text();
-			Text nameCategoryString = new Text();
-			while(!parser.isClosed()){
-				JsonToken jsonToken = parser.nextToken();
+            String[] tokens = key.toString().split(SPLIT_OPERATOR, 2);
 
-				if(JsonToken.FIELD_NAME.equals(jsonToken)){
-					String fieldName = parser.getCurrentName();
+            category.set(tokens[0] + SPLIT_OPERATOR + value.toString());
 
-					jsonToken = parser.nextToken();
+            tagCount.set(tokens[1] + SPLIT_OPERATOR + value.toString());
 
-					if("id".equals(fieldName)){
-						idCategoryString.set(parser.getText());
-					} else if ("category".equals(fieldName)){
-						nameCategoryString.set("join-category:" + parser.getText());
-					}
-				}
-			}
-			context.write(idCategoryString, nameCategoryString);
-		}
-	}
+            context.write(category, tagCount);
+        }
+    }
 
-	public static class CategoryNameReducer extends Reducer<Text, Text, Text, Text> {
+    /**
+     * Define how map output will be sorted
+     */
+    public static class SortCategoryTotalComparator extends WritableComparator {
 
-		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+        protected SortCategoryTotalComparator() {
+            super(Text.class, true);
+        }
 
-			String categoryName = "";
-			String categoryTags = "";
+        @Override
+        public int compare(WritableComparable a, WritableComparable b) {
 
-			for(Text val : values) {
-				if (val.toString().contains("join-category")) {
-					categoryName = val.toString().split(":", 2)[1];
-				} else {
-					categoryTags = val.toString();
-				}
-			}
+            String[] keyATokens = a.toString().split(SPLIT_OPERATOR, 2);
+            String[] keyBTokens = b.toString().split(SPLIT_OPERATOR, 2);
 
-			if(!categoryTags.equals("")) {
-				context.write(new Text(categoryName), new Text(categoryTags));
-			}
-		}
-	}
+            String keyA = keyATokens[0];
+            String keyB = keyBTokens[0];
+            Integer totalA = Integer.parseInt(keyATokens[1]);
+            Integer totalB = Integer.parseInt(keyBTokens[1]);
 
-	public static class DummyCategoryMapper extends Mapper<Text, Text, Text, Text> {
+            if (keyA.equals(keyB)) {
+                return totalB.compareTo(totalA);
+            } else {
+                return keyA.compareTo(keyB);
+            }
+        }
+    }
 
-		public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
-			context.write(key, value);
-		}
-	}
+    /**
+     * Define how lines will be send to reducer
+     */
+    public static class CategoryPartitioner extends Partitioner<Text, Text> {
 
-	// parameters:
-	// [0] first csv input
-	// [1] second csv input
-	// [2] third csv input
-	// [3] first job output
-	// [4] second job output
-	// [5] third job output
-	// [6] categoryies's name json
+        @Override
+        public int getPartition(Text text, Text text2, int numberOfPartitions) {
+            String[] keyTokens = text.toString().split(SPLIT_OPERATOR, 2);
+            return Math.abs(keyTokens[0].hashCode() % numberOfPartitions);
+        }
+    }
 
-	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
-		Configuration conf = new Configuration();
-		ArrayList<Job> jobs = new ArrayList<>();
-		jobs.add(Job.getInstance(conf, "Category:Tag | Total"));
-		jobs.add(Job.getInstance(conf, "Ordering tags by occurrences grouped by category"));
-		jobs.add(Job.getInstance(conf, "Join category id with category name"));
+    /**
+     * Define how lines will be grouped in reduce method
+     */
+    public static class CategoryReduceGrouping extends WritableComparator {
 
-		for (Job job: jobs){
-			job.setJarByClass(Job2Alternative.class);
-		}
+        protected CategoryReduceGrouping() {
+            super(Text.class, true);
+        }
 
-		// JOB 1
-		MultipleInputs.addInputPath(jobs.get(0), new Path(args[0]), TextInputFormat.class, TopTagsInVideosCategories.CategoryTagMapper.class);
-		MultipleInputs.addInputPath(jobs.get(0), new Path(args[1]), TextInputFormat.class, TopTagsInVideosCategories.CategoryTagMapper.class);
-		MultipleInputs.addInputPath(jobs.get(0), new Path(args[2]), TextInputFormat.class, TopTagsInVideosCategories.CategoryTagMapper.class);
+        @Override
+        public int compare(WritableComparable a, WritableComparable b) {
+            String[] keyATokens = a.toString().split(SPLIT_OPERATOR, 2);
+            String[] keyBTokens = b.toString().split(SPLIT_OPERATOR, 2);
 
-		jobs.get(0).setMapOutputKeyClass(Text.class);
-		jobs.get(0).setMapOutputValueClass(IntWritable.class);
-		jobs.get(0).setOutputFormatClass(TextOutputFormat.class);
-		jobs.get(0).setCombinerClass(CategoryTagReducer.class);
-		jobs.get(0).setReducerClass(CategoryTagReducer.class);
+            return keyATokens[0].compareTo(keyBTokens[0]);
+        }
+    }
 
-		FileSystem fs = FileSystem.get(new Configuration());
-		Path firstJobOutputPath = new Path(args[3]);
-		if (fs.exists(firstJobOutputPath)) {
-			fs.delete(firstJobOutputPath, true);
-		}
-		FileOutputFormat.setOutputPath(jobs.get(0), firstJobOutputPath);
+    public static class CategoryTopTagReducer extends Reducer<Text, Text, Text, Text> {
 
-		// JOB 2
-		FileInputFormat.addInputPath(jobs.get(1), firstJobOutputPath);
+        @Override
+        protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+            String[] keyTokens = key.toString().split(SPLIT_OPERATOR, 2);
 
-		jobs.get(1).setInputFormatClass(KeyValueTextInputFormat.class);
-		jobs.get(1).setMapperClass(TagMapper.class);
-		jobs.get(1).setReducerClass(TagReducer.class);
-		jobs.get(1).setMapOutputKeyClass(Text.class);
-		jobs.get(1).setMapOutputValueClass(Text.class);
+            int n = 0;
 
-		Path secondOutputPath = new Path(args[4]);
-		if (fs.exists(secondOutputPath)) {
-			fs.delete(secondOutputPath, true);
-		}
-		FileOutputFormat.setOutputPath(jobs.get(1), secondOutputPath);
+            List<String> top10Tags = new ArrayList<>();
 
-		//JOB 3 (JOIN)
-		MultipleInputs.addInputPath(jobs.get(2), secondOutputPath, KeyValueTextInputFormat.class, TopTagsInVideosCategories.DummyCategoryMapper.class);
-		MultipleInputs.addInputPath(jobs.get(2), new Path(args[6]), TextInputFormat.class, TopTagsInVideosCategories.CategoryNameMapper.class);
+            Iterator<Text> iterator = values.iterator();
 
-		jobs.get(2).setReducerClass(CategoryNameReducer.class);
-		jobs.get(2).setOutputKeyClass(Text.class);
-		jobs.get(2).setOutputValueClass(Text.class);
+            while(n < 10 && iterator.hasNext()) {
+                top10Tags.add(iterator.next().toString());
+                n++;
+            }
 
-		Path finalOutputPath = new Path(args[5]);
-		if (fs.exists(finalOutputPath)) {
-			fs.delete(finalOutputPath, true);
-		}
-		FileOutputFormat.setOutputPath(jobs.get(2), finalOutputPath);
+            context.write(new Text(keyTokens[0]), new Text(top10Tags.toString()));
+        }
 
-		for (Job job: jobs) {
-			if (!job.waitForCompletion(true)) {
-				System.exit(1);
-			}
-		}
-	}
+    }
+
+    //JOB3
+    public static class CategoryNamingMapper extends Mapper<Object, Text, Text, Text> {
+
+        static JsonFactory factory = new JsonFactory();
+
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+            JsonParser parser = factory.createJsonParser(value.toString());
+            Text idCategoryString = new Text();
+            Text nameCategoryString = new Text();
+            while(!parser.isClosed()){
+                JsonToken jsonToken = parser.nextToken();
+
+                if(JsonToken.FIELD_NAME.equals(jsonToken)){
+                    String fieldName = parser.getCurrentName();
+
+                    jsonToken = parser.nextToken();
+
+                    if("id".equals(fieldName)){
+                        idCategoryString.set(parser.getText());
+                    } else if ("category".equals(fieldName)){
+                        nameCategoryString.set("join-category" + SPLIT_OPERATOR + parser.getText());
+                    }
+                }
+            }
+            context.write(idCategoryString, nameCategoryString);
+        }
+    }
+
+    public static class DummyMapper extends Mapper<Text, Text, Text, Text> {
+
+        public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
+            context.write(key, value);
+        }
+    }
+
+    public static class CategoryNamingReducer extends Reducer<Text, Text, Text, Text> {
+
+        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+
+            String categoryName = "";
+            String categoryTags = "";
+
+            for(Text val : values) {
+                if (val.toString().contains("join-category")) {
+                    categoryName = val.toString().split(SPLIT_OPERATOR, 2)[1];
+                } else {
+                    categoryTags = val.toString();
+                }
+            }
+
+            if(!categoryTags.equals("")) {
+                context.write(new Text(categoryName), new Text(categoryTags));
+            }
+        }
+    }
 }
