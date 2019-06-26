@@ -7,6 +7,10 @@ val sc = new SparkContext(new SparkConf().setAppName("Youtube Trending Videos"))
 // Init SQLContext
 val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
+//Further Imports
+import org.apache.spark.sql.functions._
+import sqlContext.implicits._
+
 // File path
 val categoryJsonFilePath: String = "project/dataset/US_category_id_flat.json"
 val caVideosCsvFilePath: String = "project/dataset/cleaned/CAvideos.csv"
@@ -35,7 +39,7 @@ val categoryTags = sqlContext.sql("select category, tags from trendingVideosTmp"
 categoryTags.show()
 
 // Explode tag list
-val categoryTagsExploded = categoryTags.withColumn("tags", explode(split($"tags", "(\\|)"))).filter("tags != '[none]'").withColumn("tags", lower(col("tags")))
+val categoryTagsExploded = categoryTags.withColumn("tags", explode(split($"tags", "(\\|)"))).filter("tags != '[none]'").withColumn("tags", lower($"tags"))
 categoryTagsExploded.createOrReplaceTempView("categoryTagsExplodedTmp")
 sqlContext.cacheTable("categoryTagsExplodedTmp")
 
@@ -85,7 +89,7 @@ val groupedByCategoryString = groupedByCategory.as[( String, Array[String])].map
 groupedByCategoryString.show()
 groupedByCategoryString.collect().foreach(println)
 
-
+groupedByCategoryString.coalesce(1).write.mode("overwrite").option("header","true").csv("project/spark/output/TopTagsInVideosCategories.csv")
 
 
 

@@ -2,10 +2,15 @@
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 
+
 val sc = new SparkContext(new SparkConf().setAppName("Youtube Trending Videos"))
 
 // Init SQLContext
 val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+
+//Further Imports
+import org.apache.spark.sql.functions._
+import sqlContext.implicits._
 
 // File path
 val categoryJsonFilePath: String = "project/dataset/US_category_id_flat.json"
@@ -59,3 +64,5 @@ val badComments = badVideosDF.agg(sum("comment_count")/badNumber).as[String].col
 // Result
 val classificationDF = Seq(("neutral", neutralNumber, neutralComments(0)),("good", goodNumber, goodComments(0)), ("bad",  badNumber, badComments(0))).toDF("Classification", "Videos Number", "Average Comments")
 classificationDF.show()
+
+classificationDF.coalesce(1).write.mode("overwrite").option("header","true").csv("project/spark/output/AvgCommentsClassification.csv")
