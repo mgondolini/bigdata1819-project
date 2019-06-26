@@ -65,27 +65,19 @@ sqlContext.cacheTable("top10CategoryTagsTmp")
 top10CategoryTags.show()
 
 
-// Group Dataframe by category, creating a list of count:tags values in column top10_tags
+// Group Dataframe by category, creating a list of tags#count values in column top10_tags
 val groupByCategoryQuery = """
     | select category, max(top10_tags)
-    | from (select *, collect_list(concat(count_tag, ":", tags)) over (partition by category order by count_tag desc) as top10_tags
+    | from (select *, collect_list(concat(tags, "#", count_tag)) over (partition by category order by count_tag desc) as top10_tags
     |       from top10CategoryTagsTmp ) a
     | group by a.category
   """.stripMargin
 
 val groupedByCategory = sqlContext.sql(groupByCategoryQuery)
-groupedByCategory.show()
-groupedByCategory.collect().foreach(println)
+groupedByCategory.cache()
 
-
-// WITH SCALA API
-//import org.apache.spark.sql.functions._
-//import org.apache.spark.sql.expressions.Window
-//import sqlContext.implicits._
-//val groupedByCategory = top10CategoryTags.withColumn("top10_tags", collect_list(concat(col("count_tag"), lit(":"), col("tags"))).over(Window.partitionBy("category").orderBy($"count_tag".desc))).groupBy("category").agg(max(col("top10_tags")).as("top10_tags"))
-
-// PER UNA VISUALIZZAZIONE MIGLIORE
-val groupedByCategoryString = groupedByCategory.as[( String, Array[String])].map { case (category, top10_tags) => (category, top10_tags.mkString(",")) }.toDF("category", "top10_tags")
+// Field top10_tags converted to string to save the DataFrame as csv and for a better visualization
+val groupedByCategoryString = groupedByCategory.as[(String, Array[String])].map{ case(category, top10_tags) => (category, top10_tags.mkString(",")) }.toDF("category", "top10_tags")
 groupedByCategoryString.show()
 groupedByCategoryString.collect().foreach(println)
 
