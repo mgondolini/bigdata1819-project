@@ -26,10 +26,10 @@ public class AvgCommentsClassification {
 	private final static int FIELDS_NUMBER = 14;
 
 
-	public static class CommentsMapper extends Mapper<Object, Text, Text, IntWritable> {
+	public static class CommentsMapper extends Mapper<Object, Text, Text, DoubleWritable> {
 
 		private Text classification = new Text();
-		private IntWritable commentsIndex = new IntWritable();
+		private DoubleWritable commentsIndex = new DoubleWritable();
 
 		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
 
@@ -62,12 +62,12 @@ public class AvgCommentsClassification {
 		}
 	}
 
-	public static class CommentsReducer extends Reducer<Text, IntWritable, Text, DoubleWritable> {
+	public static class CommentsReducer extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
 
-		public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+		public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
 
 			double tot = 0, count = 0;
-			for (IntWritable value : values) {
+			for (DoubleWritable value : values) {
 				count++;
 				tot += value.get();
 			}
@@ -86,7 +86,7 @@ public class AvgCommentsClassification {
 		job.setReducerClass(CommentsReducer.class);
 
 		job.setMapOutputKeyClass(Text.class);
-		job.setMapOutputValueClass(IntWritable.class);
+		job.setMapOutputValueClass(DoubleWritable.class);
 
 		FileSystem fs = FileSystem.get(new Configuration());
 		Path outputPath = new Path(args[3]);
