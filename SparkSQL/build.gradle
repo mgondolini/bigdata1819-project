@@ -1,24 +1,29 @@
+plugins {
+    id 'java'
+    id 'scala'
+}
+
+group 'it.unibo.bigdata'
 version '1.0'
 
-apply plugin: 'scala'
-
-sourceCompatibility = 1.8
+sourceCompatibility = 1.6
 
 repositories {
     mavenCentral()
+    maven { url 'https://repository.cloudera.com/content/repositories/releases/' }
+    maven { url 'https://repository.cloudera.com/cloudera/cloudera-repos/' }
 }
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
+    compile 'com.google.guava:guava:16.0.1'
+    compile 'org.scala-lang:scala-library:2.11.2'
 
-    compile files('hadoop-min-jars/hadoop-common-2.6.0-cdh5.13.1.jar')
-    compile files('hadoop-min-jars/hadoop-core-2.6.0-mr1-cdh5.13.1.jar')
-    compile files('hadoop-min-jars/hadoop-hdfs-2.6.0-cdh5.13.1.jar')
-
-    implementation 'org.scala-lang:scala-library:2.11.6'
+    compile 'org.apache.hadoop:hadoop-common:2.6.0-cdh5.13.1'
+    compile 'org.apache.hadoop:hadoop-core:2.6.0-mr1-cdh5.13.1'
+    compile 'org.apache.hadoop:hadoop-hdfs:2.6.0-cdh5.13.1'
 
     compile 'org.apache.spark:spark-core_2.11:2.1.0'
     compile 'org.apache.spark:spark-sql_2.11:2.1.0'
     compile 'org.apache.spark:spark-hive_2.11:2.1.0'
-    compile 'org.apache.spark:spark-streaming_2.12:2.4.0'
 }
