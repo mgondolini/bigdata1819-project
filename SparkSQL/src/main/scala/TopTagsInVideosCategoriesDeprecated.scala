@@ -4,11 +4,12 @@ import org.apache.spark.{SparkConf, SparkContext}
 object TopTagsInVideosCategoriesDeprecated {
 
   def main(args: Array[String]): Unit = {
-    // Init SparkSession
+
+    // Init SparkContext
     import org.apache.spark.sql._
-    //  val sqlSession: SparkSession = SparkSession.builder().getOrCreate()
     val sc = new SparkContext(new SparkConf().setAppName("Youtube Trending Videos"))
     val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+
     //Further Imports
     import org.apache.spark.sql.functions._
     import sqlContext.implicits._
@@ -20,15 +21,6 @@ object TopTagsInVideosCategoriesDeprecated {
     val usVideosCsvFilePath: String = "exam/dataset/cleaned/USvideos.csv"
 
     //Import data from JSON file to DataFrame
-    //  val categoryNames: DataFrame = sqlSession.read.json(categoryJsonFilePath)
-
-    // Import data from CSV to DataFrame
-    //  val CaDF: DataFrame = sqlSession.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(caVideosCsvFilePath)
-    //
-    //  val GbDF: DataFrame = sqlSession.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(gbVideosCsvFilePath)
-    //
-    //  val UsDF: DataFrame = sqlSession.read.format("csv").option("delimiter", ",").option("header", "true").option("mode", "DROPMALFORMED").load(usVideosCsvFilePath)
-
     val categoryNames = sqlContext.jsonFile(categoryJsonFilePath)
 
     val schemaString = "video_id trending_date title channel_title category_id publish_time tags views likes dislikes comment_count thumbnail_link comments_disabled ratings_disabled video_error_or_removed description"
@@ -47,10 +39,7 @@ object TopTagsInVideosCategoriesDeprecated {
     val rowUsRDD = UsVideos.map(_.split(",")).map(e => Row(e(0), e(1), e(2), e(3), e(4), e(5), e(6), e(7), e(8), e(9), e(10), e(11), e(12), e(13), e(14), e(15)))
     val UsDF = sqlContext.createDataFrame(rowUsRDD, schema)
 
-
-
     // UNION
-    //  val trendingVideosUnionDF: DataFrame = CaDF.union(GbDF).union(UsDF)
     val trendingVideosUnionDF: DataFrame = CaDF.unionAll(GbDF).unionAll(UsDF)
 
     // JOIN on Category Names
