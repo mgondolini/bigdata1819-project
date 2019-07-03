@@ -57,9 +57,13 @@ object AvgCommentsClassification {
     val badComments: Array[String] = badVideosDF.agg(sum("comment_count") / badNumber).as[String].collect()
 
     // Result
-    val classificationDF: DataFrame = Seq(("neutral", neutralNumber, neutralComments(0)), ("good", goodNumber, goodComments(0)), ("bad", badNumber, badComments(0))).toDF("Classification", "Videos Number", "Average Comments")
+    val classificationDF: DataFrame = Seq(("neutral", neutralNumber, neutralComments(0)), ("good", goodNumber, goodComments(0)), ("bad", badNumber, badComments(0))).toDF("Classification", "VideosNumber", "AverageComments")
     classificationDF.show()
 
+    classificationDF.cache()
     classificationDF.coalesce(1).write.mode("overwrite").option("header", "true").csv("project/spark/output/AvgCommentsClassification.csv")
+
+    // Create table in Hive
+    classificationDF.write.mode("overwrite").option("header", "true").saveAsTable("classificationTable")
   }
 }

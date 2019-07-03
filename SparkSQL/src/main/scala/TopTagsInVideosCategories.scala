@@ -84,6 +84,10 @@ object TopTagsInVideosCategories {
     groupedByCategoryString.collect().foreach(println)
 
     groupedByCategoryString.coalesce(1).write.mode("overwrite").option("header", "true").csv("project/spark/output/TopTagsInVideosCategories.csv")
+
+    // Create table in Hive
+    groupedByCategoryString.createOrReplaceTempView("groupedByCategoryStringTmp")
+    sqlSession.sql("create table groupedByCategoryString as select * from groupedByCategoryStringTmp")
   }
 }
 
