@@ -64,6 +64,6 @@ object AvgCommentsClassification {
     classificationDF.coalesce(1).write.mode("overwrite").option("header", "true").csv("project/spark/output/AvgCommentsClassification.csv")
 
     // Create table in Hive
-    classificationDF.write.mode("overwrite").option("header", "true").saveAsTable("classificationTable")
+    classificationDF.write.mode("overwrite").option("header", "true").saveAsTable("exam_mgondolini.CommentsClassificationTable")
   }
 }

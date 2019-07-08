@@ -87,7 +87,7 @@ object TopTagsInVideosCategories {
 
     // Create table in Hive
     groupedByCategoryString.createOrReplaceTempView("groupedByCategoryStringTmp")
-    sqlSession.sql("create table groupedByCategoryString as select * from groupedByCategoryStringTmp")
+    sqlSession.sql("create table exam_mgondolini.tagsGroupedByCategoryTable as select * from groupedByCategoryStringTmp")
   }
 }
 
