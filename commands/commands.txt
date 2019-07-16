@@ -1,0 +1,20 @@
+//-------- MAPREDUCE ----------
+
+JOB#1 AvgCommentsClassification
+
+hadoop jar MapReduce-1.0.jar job1.AvgCommentsClassification exam/dataset/cleaned/GBvideos.csv exam/dataset/cleaned/CAvideos.csv exam/dataset/cleaned/USvideos.csv exam/MapReduce/output
+
+JOB#2 TopTagsInVideosCategories
+
+hadoop jar MapReduce-1.0.jar job2.TopTagsInVideosCategories exam/dataset/cleaned/GBvideos.csv exam/dataset/cleaned/CAvideos.csv exam/dataset/cleaned/USvideos.csv exam/MapReduce/output1 exam/MapReduce/output2 exam/MapReduce/output3 exam/dataset/US_category_id_flat.json
+
+
+//-------- SPARK SQL----------
+
+JOB#1 AvgCommentsClassification
+
+spark2-submit --class AvgCommentsClassification exam/SparkSQL/SparkSQL-1.0.jar
+
+JOB#2 TopTagsInVideosCategories
+
+spark2-submit --class TopTagsInVideosCategories exam/SparkSQL/SparkSQL-1.0.jar
